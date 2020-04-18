@@ -1,0 +1,62 @@
+syntax = "proto3";
+option go_package = "chat";
+
+service Chat {
+    rpc Ping (PingRequest) returns (PingResponse);
+
+    rpc CreateUser (CreateUserRequest) returns (CreateUserResponse);
+
+    rpc CreateRoom (CreateRoomRequest) returns (CreateRoomResponse);
+
+    rpc GetRooms (GetRoomsRequest) returns (GetRoomsResponse);
+
+    rpc StreamRoom(StreamRoomRequest) returns (stream StreamRoomResponse);
+}
+
+message PingRequest {
+}
+
+message PingResponse {
+    string pong = 1;
+}
+
+message CreateUserRequest {
+    string name = 1;
+}
+
+message CreateUserResponse {
+    User user = 1;
+}
+
+message CreateRoomRequest {
+    string name = 1;
+}
+
+message CreateRoomResponse {
+    Room room = 1;
+}
+
+message GetRoomsRequest {
+}
+
+message GetRoomsResponse {
+    map<string, Room>  rooms = 1;
+}
+
+message StreamRoomRequest {
+    string name = 1;
+}
+
+message StreamRoomResponse {
+    string message = 1;
+}
+
+message Room {
+    string name = 1;
+    map<string, User> users = 2;
+}
+
+message User {
+    string id = 1;
+    string name = 2;
+}
