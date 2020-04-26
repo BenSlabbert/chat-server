@@ -4,6 +4,7 @@ import (
 	"chat-server/chat"
 	"context"
 	"log"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,15 @@ var pingCmd = &cobra.Command{
 
 func runPingCmd() func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
-		pingResponse, err := chatClient.Ping(context.TODO(), &chat.PingRequest{})
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+
+		err := chatClient.limiter.Wait(ctx)
+		if err != nil {
+			return err
+		}
+
+		pingResponse, err := chatClient.call.Ping(ctx, &chat.PingRequest{}, chatClient.callOpts...)
 		if err != nil {
 			return err
 		}

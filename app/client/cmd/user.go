@@ -26,7 +26,7 @@ func runAddUserCmd() func(cmd *cobra.Command, args []string) error {
 			return errors.New("must provide a name for the user")
 		}
 
-		user, err := chatClient.CreateUser(context.TODO(), &chat.CreateUserRequest{Name: args[0]})
+		user, err := chatClient.call.CreateUser(context.TODO(), &chat.CreateUserRequest{Name: args[0]}, chatClient.callOpts...)
 		if err != nil {
 			return err
 		}

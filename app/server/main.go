@@ -4,10 +4,13 @@ import (
 	"chat-server/chat"
 	"context"
 	"fmt"
+	"golang.org/x/net/netutil"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/tap"
 	"log"
+	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -19,9 +22,10 @@ func main() {
 		panic(err)
 	}
 
-	srv := grpc.NewServer()
-	chat.RegisterChatServer(srv, NewChatServer())
-
+	listener = netutil.LimitListener(listener, 10)
+	chatServer := NewChatServer(10)
+	srv := grpc.NewServer(chatServer.srvOpts...)
+	chat.RegisterChatServer(srv, chatServer)
 	if e := srv.Serve(listener); e != nil {
 		panic(err)
 	}
@@ -34,6 +38,28 @@ type ChatServer struct {
 	rooms    map[string]*chat.Room
 
 	messengers map[string]*chat.RoomMessenger
+
+	srvOpts []grpc.ServerOption
+}
+
+func (c *ChatServer) unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	log.Printf("unaryInterceptor before handler: %s\n", info.FullMethod)
+	resp, err = handler(ctx, req)
+	log.Printf("unaryInterceptor after handler: %s\n", info.FullMethod)
+	return resp, err
+}
+
+func (c *ChatServer) streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	log.Printf("streamInterceptor before handler: %s\n", info.FullMethod)
+	err := handler(srv, ss)
+	log.Printf("streamInterceptor after handler: %s\n", info.FullMethod)
+	return err
+}
+
+func (c *ChatServer) rateLimiter(ctx context.Context, info *tap.Info) (context.Context, error) {
+	log.Printf("rateLimiter tap: %s\n", info.FullMethodName)
+	// is authenticated user? check in ctx
+	return ctx, nil
 }
 
 func (c *ChatServer) StreamRoom(request *chat.StreamRoomRequest, stream chat.Chat_StreamRoomServer) error {
@@ -42,7 +68,7 @@ func (c *ChatServer) StreamRoom(request *chat.StreamRoomRequest, stream chat.Cha
 		return status.Error(codes.NotFound, "room not found")
 	}
 
-	log.Printf("foud room: %+v\n", room)
+	log.Printf("found room: %+v\n", room)
 
 	id, msgStream := c.messengers[room.Name].Subscribe()
 	defer c.messengers[room.Name].Unsubscribe(id)
@@ -90,6 +116,11 @@ func (c *ChatServer) CreateRoom(ctx context.Context, request *chat.CreateRoomReq
 }
 
 func (c *ChatServer) Ping(ctx context.Context, request *chat.PingRequest) (*chat.PingResponse, error) {
+	log.Println("Ping")
+	if rand.Intn(10) > 5 {
+		return nil, status.Errorf(codes.Unavailable, "maybeFailRequest: failing it")
+	}
+
 	return &chat.PingResponse{
 		Pong: "pong",
 	}, nil
@@ -107,14 +138,15 @@ func (c *ChatServer) GetRooms(ctx context.Context, request *chat.GetRoomsRequest
 	}, nil
 }
 
-func NewChatServer() *ChatServer {
+func NewChatServer(maxStreams uint32) *ChatServer {
 	cs := new(ChatServer)
-	cs.Init()
+	cs.Init(maxStreams)
 	return cs
 }
 
-func (c *ChatServer) Init() {
+func (c *ChatServer) Init(maxStreams uint32) {
 	c.rooms = make(map[string]*chat.Room)
 	c.users = make(map[string]*chat.User)
 	c.messengers = make(map[string]*chat.RoomMessenger)
+	c.srvOpts = append(c.srvOpts, grpc.StreamInterceptor(c.streamInterceptor), grpc.UnaryInterceptor(c.unaryInterceptor), grpc.InTapHandle(c.rateLimiter), grpc.MaxConcurrentStreams(maxStreams))
 }

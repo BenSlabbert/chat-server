@@ -23,7 +23,7 @@ func runGetRoomsCmd() func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		fmt.Println("get rooms")
 
-		chatRoomsResponse, err := chatClient.GetRooms(context.TODO(), &chat.GetRoomsRequest{})
+		chatRoomsResponse, err := chatClient.call.GetRooms(context.TODO(), &chat.GetRoomsRequest{}, chatClient.callOpts...)
 		if err != nil {
 			return err
 		}
@@ -49,8 +49,9 @@ func runAddRoomCmd() func(cmd *cobra.Command, args []string) error {
 			return errors.New("must provide a name for the room")
 		}
 
-		createRoomResponse, err := chatClient.CreateRoom(context.TODO(), &chat.CreateRoomRequest{Name: args[0]})
+		createRoomResponse, err := chatClient.call.CreateRoom(context.TODO(), &chat.CreateRoomRequest{Name: args[0]}, chatClient.callOpts...)
 		if err != nil {
+			//status.Code(err)
 			return err
 		}
 
@@ -76,7 +77,7 @@ func runStreamRoomCmd() func(cmd *cobra.Command, args []string) error {
 		}
 
 		room := args[0]
-		stream, err := chatClient.StreamRoom(context.TODO(), &chat.StreamRoomRequest{Name: room})
+		stream, err := chatClient.call.StreamRoom(context.TODO(), &chat.StreamRoomRequest{Name: room}, chatClient.callOpts...)
 		if err != nil {
 			return err
 		}
